@@ -54,6 +54,24 @@ export class GoogleApiClient {
     return this.getAllPages<GoogleTask>(url.toString());
   }
 
+  async patchTask(
+    listId: string,
+    taskId: string,
+    status: GoogleTask['status'],
+  ): Promise<GoogleTask> {
+    const url = new URL(
+      `https://tasks.googleapis.com/tasks/v1/lists/${encodeURIComponent(listId)}/tasks/${encodeURIComponent(taskId)}`,
+    );
+    return this.request<GoogleTask>(url.toString(), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        status,
+        completed: status === 'completed' ? new Date().toISOString() : null,
+      }),
+    });
+  }
+
   async getTodayEvents(now = new Date()): Promise<GoogleCalendarEvent[]> {
     const start = new Date(now);
     start.setHours(0, 0, 0, 0);
@@ -83,13 +101,24 @@ export class GoogleApiClient {
   }
 
   private async get<T>(url: string): Promise<T> {
+    return this.request<T>(url);
+  }
+
+  private async request<T>(url: string, init: RequestInit = {}): Promise<T> {
     let token = await this.getToken(false);
-    let response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    const fetchWithToken = (accessToken: string) => fetch(url, {
+      ...init,
+      headers: {
+        ...Object.fromEntries(new Headers(init.headers).entries()),
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+    let response = await fetchWithToken(token);
 
     if (response.status === 401) {
       await this.invalidateToken(token);
       token = await this.getToken(false);
-      response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      response = await fetchWithToken(token);
     }
 
     if (!response.ok) {

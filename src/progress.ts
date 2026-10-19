@@ -14,7 +14,7 @@ export interface TaskProgress {
   progressPercent: number;
   completedSubtasks: number;
   totalSubtasks: number;
-  /** A task with children is done when all children are done. */
+  /** Completion follows the task's Google Tasks status. */
   isDone: boolean;
 }
 
@@ -59,7 +59,7 @@ export function groupTasks(tasks: readonly ProgressTaskInput[]): TaskProgress[] 
       progressPercent,
       completedSubtasks,
       totalSubtasks,
-      isDone: progressPercent === 100,
+      isDone: task.status === COMPLETED_STATUS,
     };
   };
 
@@ -121,8 +121,9 @@ function dueTimestamp(due?: string): number {
 }
 
 function dueDateKey(due: string): string {
-  // Preserve date-only values as calendar dates instead of parsing them as UTC.
-  if (/^\d{4}-\d{2}-\d{2}$/.test(due)) return due;
+  // Google Tasks stores due as a date; preserve its date portion across time zones.
+  const datePortion = due.match(/^\d{4}-\d{2}-\d{2}/)?.[0];
+  if (datePortion) return datePortion;
   const parsed = new Date(due);
   return Number.isNaN(parsed.getTime()) ? '' : localDateKey(parsed);
 }
