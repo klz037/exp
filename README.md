@@ -21,6 +21,14 @@ npm run build
 
 The production extension is written to `dist/`.
 
+## Tests
+
+Run the pure progress module's unit tests with:
+
+```sh
+npm test
+```
+
 ## Load unpacked in Chrome
 
 1. Build the extension using the commands above.
