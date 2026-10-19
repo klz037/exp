@@ -12,6 +12,17 @@ import {
   pickNextUpTask,
   type TaskProgress,
 } from './progress';
+import { GAME_CONFIG, GAME_STORAGE_KEY } from './gameConfig';
+import {
+  DEFAULT_GAME_STATE,
+  awardCompletion,
+  getActiveWeekCount,
+  getLevelProgress,
+  getWeekActivity,
+  readGameState,
+  useRestDayToken,
+  type GameState,
+} from './gameState';
 import './styles.css';
 
 interface TaskRecord extends GoogleTask {
@@ -71,6 +82,12 @@ function App() {
   const [tasks, setTasks] = React.useState<TaskRecord[]>([]);
   const [events, setEvents] = React.useState<GoogleCalendarEvent[]>([]);
   const [pendingIds, setPendingIds] = React.useState<Set<string>>(() => new Set());
+  const [gameState, setGameState] = React.useState<GameState>({ ...DEFAULT_GAME_STATE });
+  const gameStateRef = React.useRef(gameState);
+  const gameWriteQueue = React.useRef<Promise<void>>(Promise.resolve());
+  const [gameReady, setGameReady] = React.useState(false);
+  const [ringPulse, setRingPulse] = React.useState(false);
+  const pulseTimer = React.useRef<number | undefined>(undefined);
   const [today] = React.useState(() => new Date());
   const todayKey = localDateKey(today);
   const groups = React.useMemo(() => groupTasks(tasks), [tasks]);
@@ -98,6 +115,19 @@ function App() {
     groups.forEach(visit);
     return result;
   }, [groups, todayTaskIds]);
+  const level = getLevelProgress(gameState.xp);
+  const weekActivity = getWeekActivity(gameState, today);
+  const activeWeekCount = getActiveWeekCount(gameState);
+
+  const saveGameState = React.useCallback(async (nextState: GameState) => {
+    gameStateRef.current = nextState;
+    setGameState(nextState);
+    const write = gameWriteQueue.current.then(
+      () => chrome.storage.sync.set({ [GAME_STORAGE_KEY]: nextState }),
+    );
+    gameWriteQueue.current = write.catch(() => undefined);
+    await write;
+  }, []);
 
   const syncGoogleData = React.useCallback(async () => {
     setLoading(true);
@@ -132,6 +162,33 @@ function App() {
     return () => { active = false; };
   }, [syncGoogleData]);
 
+  React.useEffect(() => {
+    let active = true;
+    void chrome.storage.sync.get(GAME_STORAGE_KEY).then((stored) => {
+      if (!active) return;
+      const loaded = readGameState(stored[GAME_STORAGE_KEY]);
+      gameStateRef.current = loaded;
+      setGameState(loaded);
+      setGameReady(true);
+    }).catch(() => {
+      if (!active) return;
+      setGameReady(true);
+      setMessage('Game progress could not be loaded from Chrome sync storage.');
+    });
+    return () => { active = false; };
+  }, []);
+
+  React.useEffect(() => () => {
+    if (pulseTimer.current !== undefined) window.clearTimeout(pulseTimer.current);
+  }, []);
+
+  const pulseProgressRing = () => {
+    if (gameStateRef.current.quietMode) return;
+    setRingPulse(true);
+    if (pulseTimer.current !== undefined) window.clearTimeout(pulseTimer.current);
+    pulseTimer.current = window.setTimeout(() => setRingPulse(false), GAME_CONFIG.COMPLETION_PULSE_MS);
+  };
+
   const signIn = async () => {
     setLoading(true);
     setMessage('');
@@ -149,6 +206,7 @@ function App() {
   };
 
   const toggleTask = async (progressTask: TaskProgress, checked: boolean) => {
+    if (!gameReady) return;
     const record = tasks.find(({ id }) => id === progressTask.task.id);
     if (!record || pendingIds.has(record.id)) return;
     const previousStatus = record.status;
@@ -163,6 +221,19 @@ function App() {
       setTasks((current) => current.map((task) => task.id === record.id && task.listId === record.listId
         ? { ...saved, listId: record.listId }
         : task));
+      if (checked) pulseProgressRing();
+      const nextGameState = awardCompletion(
+        gameStateRef.current,
+        `${record.listId}:${record.id}`,
+        Boolean(record.parent),
+        checked,
+        localDateKey(new Date()),
+      );
+      try {
+        await saveGameState(nextGameState);
+      } catch {
+        setMessage('Task saved, but game progress could not sync to Chrome storage.');
+      }
     } catch (error) {
       setTasks((current) => current.map((task) => task.id === record.id && task.listId === record.listId
         ? { ...task, status: previousStatus }
@@ -177,6 +248,22 @@ function App() {
         return next;
       });
     }
+  };
+
+  const toggleQuietMode = (quietMode: boolean) => {
+    void saveGameState({ ...gameStateRef.current, quietMode }).catch(() => {
+      setMessage('Quiet mode could not be saved to Chrome sync storage.');
+    });
+    if (quietMode) {
+      setRingPulse(false);
+      if (pulseTimer.current !== undefined) window.clearTimeout(pulseTimer.current);
+    }
+  };
+
+  const useWeeklyRestToken = () => {
+    void saveGameState(useRestDayToken(gameStateRef.current, today)).catch(() => {
+      setMessage('The rest-day token could not be saved. Please try again.');
+    });
   };
 
   const dateLabel = new Intl.DateTimeFormat(undefined, {
@@ -213,7 +300,7 @@ function App() {
         ) : (
           <>
             <section className="progress-card" aria-label="Today's task progress">
-              <div className="progress-ring" role="progressbar" aria-label="Tasks completed today" aria-valuemin={0} aria-valuemax={todayProgress.totalTasks} aria-valuenow={todayProgress.completedTasks}>
+              <div className={`progress-ring${ringPulse && !gameState.quietMode ? ' ring-pulse' : ''}`} role="progressbar" aria-label="Tasks completed today" aria-valuemin={0} aria-valuemax={Math.max(1, todayProgress.totalTasks)} aria-valuenow={todayProgress.completedTasks}>
                 <svg viewBox="0 0 100 100" aria-hidden="true">
                   <circle className="ring-track" cx="50" cy="50" r="38" />
                   <circle className="ring-value" cx="50" cy="50" r="38" strokeDasharray={circumference} strokeDashoffset={ringOffset} />
@@ -227,14 +314,34 @@ function App() {
               </div>
             </section>
 
+            <section className="game-card" aria-label="Quest progress">
+              <div className="game-topline">
+                <div className="level-badge">LVL {level.level}</div>
+                <strong>{gameState.xp.toLocaleString()} XP</strong>
+              </div>
+              <div className="level-track" role="progressbar" aria-label="Progress to next level" aria-valuemin={0} aria-valuemax={100} aria-valuenow={level.progressPercent}>
+                <span style={{ width: `${level.progressPercent}%` }} />
+              </div>
+              <p className="level-caption">{level.isMaxLevel ? 'Max level reached' : `${level.currentLevelXp} / ${level.xpToNextLevel} XP to level ${level.level + 1}`}</p>
+              <div className="game-divider" />
+              <div className="week-row">
+                <div className="streak-icon" aria-hidden="true">✧</div>
+                <div className="week-copy"><strong>{activeWeekCount} active {activeWeekCount === 1 ? 'week' : 'weeks'}</strong><span>{weekActivity.completionDays} of {GAME_CONFIG.ACTIVE_DAYS_REQUIRED} completion days this week{weekActivity.restTokenUsed ? ' · rest day used' : ''}</span></div>
+                {!weekActivity.restTokenUsed && weekActivity.completionDays === GAME_CONFIG.ACTIVE_DAYS_REQUIRED - 1 && (
+                  <button className="rest-token-button" type="button" onClick={useWeeklyRestToken} disabled={!gameReady}>Use rest token</button>
+                )}
+              </div>
+              <label className="quiet-toggle"><input type="checkbox" checked={gameState.quietMode} onChange={(event) => toggleQuietMode(event.currentTarget.checked)} disabled={!gameReady} /><span className="toggle-track" aria-hidden="true"><span /></span><span>Quiet mode</span></label>
+            </section>
+
             {nextUp ? (
               <section className="next-card" aria-labelledby="next-heading">
                 <div className="card-kicker"><span className="next-icon" aria-hidden="true">↗</span><p className="eyebrow">NEXT UP</p></div>
-                <TaskCheck task={nextUp} pending={pendingIds.has(nextUp.task.id)} onToggle={toggleTask} prominent />
+                <TaskCheck task={nextUp} pending={pendingIds.has(nextUp.task.id) || !gameReady} onToggle={toggleTask} prominent />
                 {nextUp.subtasks.length > 0 && (
                   <div className="checklist" aria-label="Subtasks">
                     {nextUp.subtasks.map((subtask) => (
-                      <TaskCheck key={subtask.task.id} task={subtask} pending={pendingIds.has(subtask.task.id)} onToggle={toggleTask} />
+                      <TaskCheck key={subtask.task.id} task={subtask} pending={pendingIds.has(subtask.task.id) || !gameReady} onToggle={toggleTask} />
                     ))}
                   </div>
                 )}
@@ -265,7 +372,7 @@ function App() {
               <summary><span>Later</span><span className="later-count">{laterTasks.length}</span><span className="chevron" aria-hidden="true">⌄</span></summary>
               <div className="later-list">
                 {laterTasks.length > 0 ? laterTasks.map((task) => (
-                  <TaskCheck key={task.task.id} task={task} pending={pendingIds.has(task.task.id)} onToggle={toggleTask} />
+                  <TaskCheck key={task.task.id} task={task} pending={pendingIds.has(task.task.id) || !gameReady} onToggle={toggleTask} />
                 )) : <p className="quiet-empty">Nothing waiting in the wings.</p>}
               </div>
             </details>
