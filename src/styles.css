@@ -7,7 +7,8 @@ button { font: inherit; }
 .brand-mark { display: grid; width: 38px; height: 38px; place-items: center; border-radius: 13px; color: #fff; background: #7164a8; font-size: 21px; }
 .eyebrow { margin: 0 0 3px; color: #827c8a; font-size: 10px; font-weight: 700; letter-spacing: .13em; }
 h1 { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: -.02em; }
-.avatar { margin-left: auto; width: 32px; height: 32px; border: 0; border-radius: 50%; color: #7164a8; background: #ebe7f3; font-size: 21px; line-height: 1; cursor: pointer; }
+.connection-dot { width: 9px; height: 9px; margin-left: auto; border-radius: 50%; background: #c7c3ca; }
+.connection-dot.is-connected { background: #5e9d79; box-shadow: 0 0 0 4px #e4efe7; }
 .today { padding-top: 27px; }
 .date { margin: 0 0 4px; color: #817d85; font-size: 12px; }
 h2 { margin: 0; font-size: 24px; letter-spacing: -.04em; }
@@ -15,5 +16,14 @@ h2 { margin: 0; font-size: 24px; letter-spacing: -.04em; }
 .sunrise { display: grid; width: 48px; height: 48px; place-items: center; border-radius: 16px; color: #bd8a42; background: #fbf0db; font-size: 25px; }
 h3 { margin: 15px 0 5px; font-size: 15px; font-weight: 650; }
 .empty-state p { margin: 0; color: #817d85; font-size: 13px; line-height: 1.5; }
+.connect-card { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 18px; padding: 15px; border: 1px solid #ebe7df; border-radius: 16px; background: #fffefa; }
+.connect-copy { display: flex; flex: 1 1 145px; flex-direction: column; gap: 4px; }
+.connect-copy strong { font-size: 13px; font-weight: 650; }
+.connect-copy span { color: #817d85; font-size: 11px; line-height: 1.4; }
+.sign-in-button { padding: 9px 14px; border: 0; border-radius: 10px; color: #fff; background: #7164a8; font-size: 12px; font-weight: 650; cursor: pointer; }
+.sign-in-button:disabled { opacity: .65; cursor: wait; }
+.status-message, .data-summary { flex: 1 0 100%; margin: 0; font-size: 11px; line-height: 1.45; }
+.status-message { color: #8b5a39; }
+.data-summary { color: #5e8067; }
 .footer { display: flex; align-items: center; justify-content: center; gap: 7px; margin-top: auto; padding-top: 22px; color: #817d85; font-size: 12px; }
 .sparkle { color: #8a7cba; font-size: 17px; }
