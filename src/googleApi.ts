@@ -113,12 +113,21 @@ export class GoogleApiClient {
         Authorization: `Bearer ${accessToken}`,
       },
     });
-    let response = await fetchWithToken(token);
+    let response: Response;
+    try {
+      response = await fetchWithToken(token);
+    } catch {
+      throw new GoogleApiError('Google could not be reached. Check your internet connection and try again.');
+    }
 
     if (response.status === 401) {
       await this.invalidateToken(token);
       token = await this.getToken(false);
-      response = await fetchWithToken(token);
+      try {
+        response = await fetchWithToken(token);
+      } catch {
+        throw new GoogleApiError('Google could not be reached. Check your internet connection and try again.');
+      }
     }
 
     if (!response.ok) {

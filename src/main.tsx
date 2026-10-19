@@ -86,10 +86,13 @@ function clockLabel(event: GoogleCalendarEvent): string {
 
 function App() {
   const [signedIn, setSignedIn] = React.useState(false);
+  const [authReady, setAuthReady] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
+  const [hasLoadedData, setHasLoadedData] = React.useState(false);
   const [message, setMessage] = React.useState('');
   const [taskLists, setTaskLists] = React.useState<GoogleTaskList[]>([]);
   const [settingsOpen, setSettingsOpen] = React.useState(false);
+  const settingsButtonRef = React.useRef<HTMLButtonElement>(null);
   const [focusMode, setFocusMode] = React.useState(false);
   const [tasks, setTasks] = React.useState<TaskRecord[]>([]);
   const [events, setEvents] = React.useState<GoogleCalendarEvent[]>([]);
@@ -153,6 +156,7 @@ function App() {
       setEvents(nextData.events);
       setTaskLists(nextData.taskLists);
       setSignedIn(true);
+      setHasLoadedData(true);
       if (nextData.selectedTaskListId !== gameStateRef.current.selectedTaskListId) {
         await saveGameState({ ...gameStateRef.current, selectedTaskListId: nextData.selectedTaskListId });
       }
@@ -173,11 +177,17 @@ function App() {
     void (async () => {
       try {
         const result = await chrome.identity.getAuthToken({ interactive: false });
-        if (!result.token || !active) return;
+        if (!active) return;
+        if (!result.token) {
+          setAuthReady(true);
+          return;
+        }
         setSignedIn(true);
         await syncGoogleData();
       } catch {
         // No cached authorization is expected before the user signs in.
+      } finally {
+        if (active) setAuthReady(true);
       }
     })();
     return () => { active = false; };
@@ -344,7 +354,7 @@ function App() {
         <>
           <header className="focus-header"><div><p className="eyebrow">FOCUS MODE</p><h1>One thing at a time</h1></div><button className="exit-focus-button" type="button" onClick={() => setFocusMode(false)}>Exit focus</button></header>
           {nextUp ? <NextUpCard task={nextUp} pendingIds={pendingIds} gameReady={gameReady} onToggle={toggleTask} /> : <section className="next-card all-done"><span className="done-mark" aria-hidden="true">✓</span><div><h3>Nothing to focus on</h3><p>Your next step will appear here.</p></div></section>}
-          {message && <p className="status-message panel-message" role="status">{message}</p>}
+          {message && <p className="status-message panel-message" role="alert">{message}</p>}
         </>
       ) : (
         <>
@@ -353,9 +363,9 @@ function App() {
         <div className="brand-copy"><p className="eyebrow">QUEST PANEL</p><h1>Your day, one step at a time</h1></div>
         <div className="header-actions">
           {signedIn && <button className="toolbar-button" type="button" onClick={() => setFocusMode(true)} aria-label="Enter Focus Mode" title="Focus Mode">◉</button>}
-          <button className="toolbar-button" type="button" onClick={() => setSettingsOpen(true)} aria-label="Open settings" title="Settings">⚙</button>
+          <button ref={settingsButtonRef} className="toolbar-button" type="button" onClick={() => setSettingsOpen(true)} aria-label="Open settings" title="Settings">⚙</button>
         </div>
-        <span className={`connection-dot${signedIn ? ' is-connected' : ''}`} aria-label={signedIn ? 'Google connected' : 'Google not connected'} />
+        <span className={`connection-dot${signedIn ? ' is-connected' : ''}`} role="img" aria-label={signedIn ? 'Google connected' : 'Google not connected'} />
       </header>
 
       <section className="today" aria-labelledby="today-heading">
@@ -364,7 +374,7 @@ function App() {
           {signedIn && <button className="refresh-button" type="button" onClick={() => void syncGoogleData()} disabled={loading} aria-label="Refresh today's tasks and events">↻</button>}
         </div>
 
-        {!signedIn ? (
+        {!authReady ? <PanelSkeleton /> : !signedIn ? (
           <div className="connect-card">
             <div className="connect-copy">
               <strong>Connect your Google account</strong>
@@ -373,12 +383,21 @@ function App() {
             <button className="sign-in-button" type="button" onClick={signIn} disabled={loading || !gameReady}>
               {loading || !gameReady ? 'Loading…' : 'Sign in'}
             </button>
-            {message && <p className="status-message" role="status">{message}</p>}
+            {message && <p className="status-message" role="alert">{message}</p>}
           </div>
+        ) : !hasLoadedData ? (
+          loading ? <PanelSkeleton /> : <section className="load-error" role="alert" aria-live="assertive">
+            <strong>We couldn’t load your Google data.</strong>
+            <p>{message || 'Check your connection and try again.'}</p>
+            {message.includes('Select Sign in')
+              ? <button className="retry-button" type="button" onClick={() => void signIn()} disabled={loading}>Sign in again</button>
+              : <button className="retry-button" type="button" onClick={() => void syncGoogleData()} disabled={loading}>Try again</button>}
+          </section>
         ) : (
           <>
+            {loading && <p className="refresh-status" role="status">Refreshing tasks and calendar…</p>}
             <section className="progress-card" aria-label="Today's task progress">
-              <div className={`progress-ring${ringPulse && !gameState.quietMode ? ' ring-pulse' : ''}`} role="progressbar" aria-label="Tasks completed today" aria-valuemin={0} aria-valuemax={Math.max(1, todayProgress.totalTasks)} aria-valuenow={todayProgress.completedTasks}>
+              <div className={`progress-ring${ringPulse && !gameState.quietMode ? ' ring-pulse' : ''}`} role="progressbar" aria-label="Today’s task progress" aria-valuemin={0} aria-valuemax={Math.max(1, todayProgress.totalTasks)} aria-valuenow={todayProgress.completedTasks} aria-valuetext={`${todayProgress.completedTasks} of ${todayProgress.totalTasks} tasks complete`}>
                 <svg viewBox="0 0 100 100" aria-hidden="true">
                   <circle className="ring-track" cx="50" cy="50" r="38" />
                   <circle className="ring-value" cx="50" cy="50" r="38" strokeDasharray={circumference} strokeDashoffset={ringOffset} />
@@ -415,6 +434,11 @@ function App() {
 
             {nextUp ? (
               <NextUpCard task={nextUp} pendingIds={pendingIds} gameReady={gameReady} onToggle={toggleTask} />
+            ) : groups.length === 0 ? (
+              <section className="next-card all-done" aria-label="No tasks">
+                <span className="done-mark" aria-hidden="true">＋</span>
+                <div><h3>No tasks in this view</h3><p>Add a task in Google Tasks or choose another list in Settings.</p></div>
+              </section>
             ) : (
               <section className="next-card all-done"><span className="done-mark" aria-hidden="true">✓</span><div><h3>You’re all caught up</h3><p>Enjoy the space you made today.</p></div></section>
             )}
@@ -425,7 +449,7 @@ function App() {
                 <ol className="timeline">
                   {events.map((event) => (
                     <li className="timeline-item" key={event.id}>
-                      <time>{clockLabel(event)}</time>
+                      <time dateTime={event.start?.dateTime ?? event.start?.date}>{clockLabel(event)}</time>
                       <span className="timeline-dot" aria-hidden="true" />
                       <span className="event-title">{event.summary || 'Untitled event'}</span>
                     </li>
@@ -442,7 +466,7 @@ function App() {
                 )) : <p className="quiet-empty">Nothing waiting in the wings.</p>}
               </div>
             </details>
-            {message && <p className="status-message panel-message" role="status">{message}</p>}
+            {message && <div className="panel-message" role="alert"><p className="status-message">{message}</p>{message.includes('Select Sign in') && <button className="retry-button" type="button" onClick={() => void signIn()} disabled={loading}>Sign in again</button>}</div>}
           </>
         )}
       </section>
@@ -455,7 +479,7 @@ function App() {
         loading={loading}
         gameReady={gameReady}
         signedIn={signedIn}
-        onClose={() => setSettingsOpen(false)}
+        onClose={() => { setSettingsOpen(false); settingsButtonRef.current?.focus(); }}
         onQuietMode={toggleQuietMode}
         onTaskList={changeTaskList}
         onXp={toggleXp}
@@ -463,6 +487,16 @@ function App() {
       />}
     </main>
   );
+}
+
+function PanelSkeleton() {
+  return <section className="panel-skeleton" role="status" aria-label="Loading tasks and calendar" aria-busy="true">
+    <span className="sr-only">Loading tasks and calendar…</span>
+    <div className="skeleton-line skeleton-date" aria-hidden="true" />
+    <div className="skeleton-line skeleton-heading" aria-hidden="true" />
+    <div className="skeleton-card skeleton-progress" aria-hidden="true"><span className="skeleton-ring" /><span className="skeleton-copy" /></div>
+    <div className="skeleton-card skeleton-next" aria-hidden="true"><span className="skeleton-line skeleton-short" /><span className="skeleton-line skeleton-task" /><span className="skeleton-line skeleton-task" /></div>
+  </section>;
 }
 
 interface NextUpCardProps {
@@ -516,14 +550,28 @@ function SettingsDrawer({
   onXp,
   onReset,
 }: SettingsDrawerProps) {
+  const drawerRef = React.useRef<HTMLElement>(null);
+  const closeRef = React.useRef<HTMLButtonElement>(null);
+  React.useEffect(() => { closeRef.current?.focus(); }, []);
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
+    if (event.key === 'Escape') { event.preventDefault(); onClose(); return; }
+    if (event.key !== 'Tab' || !drawerRef.current) return;
+    const items = Array.from(drawerRef.current.querySelectorAll<HTMLElement>(
+      'button:not(:disabled), input:not(:disabled), select:not(:disabled), [href], [tabindex]:not([tabindex="-1"])',
+    ));
+    const first = items[0];
+    const last = items[items.length - 1];
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+  };
   return (
     <div className="settings-overlay" onMouseDown={(event) => {
       if (event.target === event.currentTarget) onClose();
     }}>
-      <section className="settings-drawer" role="dialog" aria-modal="true" aria-labelledby="settings-heading">
+      <section ref={drawerRef} className="settings-drawer" role="dialog" aria-modal="true" aria-labelledby="settings-heading" onKeyDown={handleKeyDown}>
         <header className="settings-header">
           <div><p className="eyebrow">PREFERENCES</p><h2 id="settings-heading">Settings</h2></div>
-          <button className="drawer-close" type="button" onClick={onClose} aria-label="Close settings">×</button>
+          <button ref={closeRef} className="drawer-close" type="button" onClick={onClose} aria-label="Close settings">×</button>
         </header>
         <label className="setting-row">
           <span><strong>Quiet mode</strong><small>Turn off completion animations.</small></span>
@@ -563,6 +611,7 @@ function TaskCheck({ task, pending, prominent = false, onToggle }: TaskCheckProp
       <input
         type="checkbox"
         checked={task.task.status === 'completed'}
+        aria-label={`${task.task.status === 'completed' ? 'Mark incomplete' : 'Mark complete'}: ${task.task.title}`}
         disabled={pending}
         onChange={(event) => onToggle(task, event.currentTarget.checked)}
       />
