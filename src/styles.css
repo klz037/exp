@@ -31,6 +31,9 @@ button { color: inherit; }
 h1 { margin: 3px 0 0; font-size: 14px; font-weight: 650; letter-spacing: -.02em; }
 .connection-dot { width: 8px; height: 8px; margin-left: auto; border-radius: 50%; background: #c7c3ca; }
 .connection-dot.is-connected { background: var(--success); box-shadow: 0 0 0 4px color-mix(in srgb, var(--success) 15%, transparent); }
+.header-actions { display: flex; align-items: center; gap: 5px; margin-left: auto; }
+.toolbar-button { display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid transparent; border-radius: 10px; color: var(--muted); background: transparent; font-size: 16px; cursor: pointer; }
+.toolbar-button:hover, .toolbar-button:focus-visible { border-color: var(--line); color: var(--accent); background: var(--surface); }
 .today { padding-top: 22px; }
 .section-heading { display: flex; align-items: center; justify-content: space-between; }
 .date { margin: 0 0 3px; color: var(--muted); font-size: 11px; }
@@ -126,6 +129,31 @@ h2 { margin: 0; font-size: 23px; font-weight: 680; letter-spacing: -.045em; }
 .later-list .task-check { min-height: 34px; }
 .status-message { margin: 0; color: #9a5b42; font-size: 11px; line-height: 1.5; }
 .panel-message { margin-top: 12px; }
+.focus-mode { justify-content: flex-start; gap: 18px; min-height: 100vh; padding-top: 17px; }
+.focus-header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 15px; border-bottom: 1px solid var(--line); }
+.focus-header h1 { font-size: 15px; }
+.exit-focus-button { padding: 8px 11px; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); background: var(--surface); font-size: 11px; cursor: pointer; }
+.focus-mode .next-card { width: 100%; margin: 0; padding: 20px 18px 17px; }
+.focus-mode .task-check-prominent .task-title { font-size: 18px; }
+.settings-overlay { position: fixed; z-index: 20; inset: 0; display: flex; justify-content: flex-end; background: rgb(22 20 27 / 38%); animation: overlay-in 160ms ease-out; }
+.settings-drawer { overflow-y: auto; width: min(330px, 92vw); min-height: 100%; padding: 23px 20px; border-left: 1px solid var(--line); background: var(--page); box-shadow: -12px 0 38px rgb(0 0 0 / 12%); animation: drawer-in 200ms ease-out; }
+.settings-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding-bottom: 17px; border-bottom: 1px solid var(--line); }
+.settings-header h2 { margin-top: 4px; font-size: 21px; }
+.drawer-close { display: grid; width: 31px; height: 31px; place-items: center; border: 1px solid var(--line); border-radius: 50%; color: var(--muted); background: var(--surface); font-size: 20px; line-height: 1; cursor: pointer; }
+.setting-row, .setting-field, .reset-setting { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 15px 0; border-bottom: 1px solid var(--line); }
+.setting-row > span, .setting-field > span, .reset-setting > div { display: flex; flex-direction: column; gap: 4px; }
+.setting-row strong, .setting-field strong, .reset-setting strong { font-size: 12px; font-weight: 660; }
+.setting-row small, .setting-field small, .reset-setting small { color: var(--muted); font-size: 10px; line-height: 1.45; }
+.setting-row input { width: 16px; height: 16px; accent-color: var(--accent); }
+.setting-field { align-items: stretch; flex-direction: column; }
+.setting-field select { width: 100%; margin-top: 3px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; color: var(--text); background: var(--surface); font: inherit; font-size: 11px; }
+.setting-hint { margin-top: -5px; }
+.reset-setting { align-items: flex-start; }
+.reset-setting > div { flex: 1; }
+.reset-button { padding: 8px 11px; border: 1px solid color-mix(in srgb, #be6d62 45%, var(--line)); border-radius: 9px; color: #a4544a; background: color-mix(in srgb, #be6d62 8%, var(--surface)); font-size: 10px; font-weight: 650; cursor: pointer; }
+.reset-button:disabled { opacity: .55; cursor: wait; }
+@keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes drawer-in { from { transform: translateX(18px); } to { transform: translateX(0); } }
 .footer { display: flex; align-items: center; justify-content: center; gap: 7px; margin-top: auto; padding-top: 20px; color: var(--muted); font-size: 11px; }
 .sparkle { color: #8a7cba; font-size: 16px; }
 

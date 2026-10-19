@@ -9,6 +9,8 @@ export interface GameState {
   /** ISO week keys where the single rest-day token was used. */
   restTokenWeeks: string[];
   quietMode: boolean;
+  xpEnabled: boolean;
+  selectedTaskListId: string | null;
 }
 
 export interface LevelProgress {
@@ -33,6 +35,8 @@ export const DEFAULT_GAME_STATE: GameState = {
   completionIdsByDay: {},
   restTokenWeeks: [],
   quietMode: false,
+  xpEnabled: true,
+  selectedTaskListId: null,
 };
 
 export function readGameState(value: unknown): GameState {
@@ -45,6 +49,8 @@ export function readGameState(value: unknown): GameState {
     completionIdsByDay: isStringArrayRecord(saved.completionIdsByDay) ? saved.completionIdsByDay : {},
     restTokenWeeks: Array.isArray(saved.restTokenWeeks) ? saved.restTokenWeeks.filter(isString) : [],
     quietMode: saved.quietMode === true,
+    xpEnabled: saved.xpEnabled !== false,
+    selectedTaskListId: typeof saved.selectedTaskListId === 'string' ? saved.selectedTaskListId : null,
   };
 }
 
@@ -54,6 +60,7 @@ export function awardCompletion(
   isSubtask: boolean,
   completed: boolean,
   localDay: string,
+  xpEnabled = true,
 ): GameState {
   const completionIdsByDay = { ...state.completionIdsByDay };
   const todaysIds = new Set(completionIdsByDay[localDay] ?? []);
@@ -68,13 +75,25 @@ export function awardCompletion(
   const awardedIds = isSubtask ? state.awardedSubtaskIds : state.awardedTaskIds;
   if (awardedIds.includes(taskKey)) return { ...state, completionIdsByDay };
 
-  const reward = isSubtask ? GAME_CONFIG.XP_PER_SUBTASK : GAME_CONFIG.XP_PER_COMPLETED_TASK;
+  const reward = xpEnabled
+    ? (isSubtask ? GAME_CONFIG.XP_PER_SUBTASK : GAME_CONFIG.XP_PER_COMPLETED_TASK)
+    : 0;
   return {
     ...state,
     xp: state.xp + reward,
     awardedTaskIds: isSubtask ? state.awardedTaskIds : [...state.awardedTaskIds, taskKey],
     awardedSubtaskIds: isSubtask ? [...state.awardedSubtaskIds, taskKey] : state.awardedSubtaskIds,
     completionIdsByDay,
+  };
+}
+
+/** Clears earned progress while retaining one-time award history and preferences. */
+export function resetGameProgress(state: GameState): GameState {
+  return {
+    ...state,
+    xp: 0,
+    completionIdsByDay: {},
+    restTokenWeeks: [],
   };
 }
 

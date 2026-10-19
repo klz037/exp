@@ -44,6 +44,8 @@ After changing the code, run `npm run build` again. On `chrome://extensions`, us
 
 Quest progress is saved in `chrome.storage.sync`. XP rewards, level thresholds, active days per week, and the completion animation duration are centralized in `src/gameConfig.ts`. Each task and subtask ID can award its completion XP only once, even if it is later unchecked and completed again. Weekly activity qualifies after the configured number of distinct completion days; when one day short, the week's single rest-day token can count as that final day. Quiet mode is saved with the rest of the game settings and suppresses the ring pulse.
 
+The settings drawer lets you choose all task lists or one list, pause XP rewards, change quiet mode, and reset XP and weekly activity. One-time reward history is retained on reset to prevent farming. Focus Mode shows only the Next up card and its checklist. The side panel refreshes when it becomes visible and every three minutes while open.
+
 ## Google Cloud Console setup
 
 1. In [Google Cloud Console](https://console.cloud.google.com/), create a project or select one for Quest Panel.
